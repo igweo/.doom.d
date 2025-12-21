@@ -54,5 +54,5 @@
 
 (package! org-pomodoro)
 
-(package! selected-window-accent-mode
-  :recipe (:host github :repo "captainflasmr/selected-window-accent-mode"))
+(package! claude-code-ide
+  :recipe (:host github :repo "manzaltu/claude-code-ide.el"))

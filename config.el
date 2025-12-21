@@ -5,9 +5,7 @@
 
 
 ;; Some functionality uses this to identify you, e.g. GPG configuration, email
-;; clients, file templates and snippets. It is optional.
-;; (setq user-full-name "John Doe"
-;;       user-mail-address "john@doe.com")
+;; clients, file templates and snippets. It is optional. (setq user-full-name "John Doe" user-mail-address "john@doe.com")
 
 ;; Doom exposes five (optional) variables for controlling fonts in Doom:
 ;;
@@ -34,15 +32,35 @@
 ;; `load-theme' function. This is the default:
 
 ;; THEME
+;; (add-to-list 'default-frame-alist '(alpha 85))
 (setq doom-theme 'doom-homage-black)
-(setq fancy-splash-image "~/.doom.d/doom-splash.png")
+(setq fancy-splash-image "~/.doom.d/doom-splash-2.jpg")
+
+;; SPLASH SCREEN QUOTE
+(defvar my/splash-quotes
+  '("OMNIA ROMAE VENALIA SUNT"))
+
+(defun my/random-splash-quote ()
+  (let* ((quote (nth (random (length my/splash-quotes)) my/splash-quotes))
+         (scaled-width (ceiling (* (length quote) 1.4)))
+         (padding (make-string (max 0 (/ (- +doom-dashboard--width scaled-width) 2)) ?\s)))
+    (insert "\n")
+    (insert padding)
+    (insert (propertize quote
+                        'face '(:inherit font-lock-comment-face :slant italic :height 1.4)))
+    (insert "\n\n")))
+
+(setq +doom-dashboard-functions
+      '(doom-dashboard-widget-banner
+        my/random-splash-quote
+        doom-dashboard-widget-shortmenu
+        doom-dashboard-widget-loaded))
 
 ;; FONTS
 (setq doom-font (font-spec :family "Iosevka Nerd Font Mono" :size 14)
       doom-variable-pitch-font (font-spec :family "Iosevka Nerd Font" :size 13)
-      doom-symbol-font (font-spec :family "all-the-icons") ;; this is key
+      doom-symbol-font (font-spec :family "all-the-icons")
       doom-unicode-font (font-spec :family "all-the-icons"))
-
 ;; If you use `org' and don't want your org files in the default location below,
 ;; change `org-directory'. It must be set before org loads!
 (setq org-directory "~/org/")
@@ -59,6 +77,10 @@
       :prefix "w"
       :desc "Switch window"
       "w" #'other-window)
+(map! :leader
+      :desc "Dired buffer"
+      "d" #'dired)
+
 
 (map! :leader
       :desc "Lookup Fast"
@@ -66,7 +88,7 @@
 
 (map! :leader
       :desc "Rename symbol"
-      "r" #'tide-rename-symbol)
+      "r" #'lsp-rename)
 ;;TRAMP
 ;;
 (use-package tramp
@@ -120,10 +142,10 @@
 (use-package! org-alert
   :after org
   :config
-  (setq org-alert-interval 300 ; check every 5 minutes
+  (setq org-alert-interval 300 ; Check every 5 minutes
         org-alert-notification-title "Org Reminder"
-        org-alert-notify-cutoff 10 ; show alerts for tasks due in 10 minutes
-        org-alert-notify-after-event-cutoff 10 ; keep showing for 10 mins after
+        org-alert-notify-cutoff 10 ; Show alerts for tasks due in 10 minutes
+        org-alert-notify-after-event-cutoff 10 ; Keep showing for 10 mins after
         org-alert-days-to-alert 1 ; look up to 1 day ahead
         org-alert-bell nil ; set to t to ring system bell
         )
@@ -158,16 +180,106 @@
 
 
 
-;; WINDOW- BORDER
-(use-package selected-window-accent-mode
-  :config (selected-window-accent-mode 1)
-  :custom
-  (selected-window-accent-fringe-thickness 10)
-  (selected-window-accent-tab-height 3)
-  (selected-window-accent-custom-color "#04D9FF")
-  (selected-window-accent-mode-style 'tiling)
-  (selected-window-accent-tab-accent t)
-  (selected-window-accent-smart-borders t))
 
-(set-frame-parameter (selected-frame) 'alpha 85)
-(add-to-list 'default-frame-alist '(alpha 85))
+
+;; ============================================================
+;; LSP QUALITY OF LIFE - TypeScript / Web
+;; ============================================================
+(after! lsp-mode
+  ;; Performance tuning
+  (setq lsp-idle-delay 0.5
+        lsp-log-io nil
+        lsp-completion-provider :capf
+        lsp-headerline-breadcrumb-enable t
+        lsp-enable-symbol-highlighting t
+        lsp-enable-on-type-formatting t
+        lsp-signature-auto-activate t
+        lsp-signature-render-documentation t
+        lsp-modeline-code-actions-enable t
+        lsp-modeline-diagnostics-enable t
+        lsp-lens-enable t))
+
+(after! lsp-ui
+  (setq lsp-ui-doc-enable t
+        lsp-ui-doc-show-with-cursor t
+        lsp-ui-doc-position 'at-point
+        lsp-ui-doc-delay 0.2
+        lsp-ui-sideline-enable t
+        lsp-ui-sideline-show-hover nil
+        lsp-ui-sideline-show-diagnostics t
+        lsp-ui-sideline-show-code-actions t
+        lsp-ui-peek-enable t))
+
+;; TypeScript specific
+(after! typescript-mode
+  (setq typescript-indent-level 2))
+
+;; Enable company and LSP for tree-sitter TypeScript modes
+(add-hook 'typescript-tsx-mode-hook #'company-mode)
+(add-hook 'typescript-tsx-mode-hook #'lsp!)
+(add-hook 'typescript-ts-mode-hook #'company-mode)
+(add-hook 'typescript-ts-mode-hook #'lsp!)
+
+;; Use typescript-language-server
+(after! lsp-mode
+  (setq lsp-clients-typescript-prefer-use-project-ts-server t))
+
+;; Web-mode settings for JSX/TSX
+(after! web-mode
+  (setq web-mode-markup-indent-offset 2
+        web-mode-css-indent-offset 2
+        web-mode-code-indent-offset 2
+        web-mode-enable-auto-quoting nil))
+
+;; ============================================================
+;; LSP QUALITY OF LIFE - Rust
+;; ============================================================
+(after! rustic
+  (setq rustic-format-on-save t
+        rustic-lsp-client 'lsp-mode))
+
+(after! lsp-rust
+  (setq lsp-rust-analyzer-cargo-watch-command "clippy"
+        lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial"
+        lsp-rust-analyzer-display-chaining-hints t
+        lsp-rust-analyzer-display-closure-return-type-hints t
+        lsp-rust-analyzer-display-parameter-hints t
+        lsp-rust-analyzer-proc-macro-enable t
+        lsp-rust-analyzer-cargo-load-out-dirs-from-check t
+        lsp-rust-analyzer-inlay-hints-mode t))
+
+;; ============================================================
+;; FILE / DIRECTORY CREATION KEYBINDS
+;; ============================================================
+(defun my/create-file ()
+  "Create a new file, prompting for the path."
+  (interactive)
+  (let ((file (read-file-name "Create file: ")))
+    (when (and file (not (string-empty-p file)))
+      (make-directory (file-name-directory file) t)
+      (find-file file))))
+
+(defun my/create-directory ()
+  "Create a new directory, prompting for the path."
+  (interactive)
+  (let ((dir (read-directory-name "Create directory: ")))
+    (when (and dir (not (string-empty-p dir)))
+      (make-directory dir t)
+      (dired dir))))
+
+(map! :leader
+      (:prefix ("f" . "files")
+       :desc "Create new file" "n" #'my/create-file
+       :desc "Create new directory" "N" #'my/create-directory))
+
+;; ============================================================
+;; CLAUDE CODE
+;; ============================================================
+(use-package! claude-code-ide
+  :commands (claude-code-ide-start)
+  :config
+  (setq claude-code-ide-auto-accept nil))
+
+(map! :leader
+      (:prefix ("s" . "search")
+       :desc "Claude Code" "c" #'claude-code-ide))
