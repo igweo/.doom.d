@@ -87,6 +87,10 @@
       "o e" #'my/split-and-eww)
 
 (map! :leader
+      :desc "Wikipedia search"
+      "o w" #'my/wikipedia-search)
+
+(map! :leader
       :desc "Rename symbol"
       "r" #'lsp-rename)
 ;;TRAMP
@@ -157,6 +161,18 @@
         ("r" "Reminder" entry (file+headline "~/org/inbox.org" "Reminders")
          "* TODO %?\n  DEADLINE: %^T\n  %U")))
 
+;; ORG-ROAM-UI
+(use-package! websocket
+  :after org-roam)
+
+(use-package! org-roam-ui
+  :after org-roam
+  :config
+  (setq org-roam-ui-sync-theme t
+        org-roam-ui-follow t
+        org-roam-ui-update-on-save t
+        org-roam-ui-open-on-start t))
+
 (use-package! org-pomodoro
   :after org
   :config
@@ -174,6 +190,16 @@
   "Split horizontally and open EWW in the new window. Prompts for URL if none is provided."
   (interactive)
   (let ((url (or url (read-string "URL: "))))
+    (split-window-right)
+    (other-window 1)
+    (eww url)))
+
+(defun my/wikipedia-search ()
+  "Search Wikipedia and open results in EWW in a split window."
+  (interactive)
+  (let* ((query (read-string "Wikipedia search: "))
+         (url (concat "https://en.wikipedia.org/wiki/Special:Search?search="
+                      (url-hexify-string query))))
     (split-window-right)
     (other-window 1)
     (eww url)))
@@ -249,6 +275,23 @@
         lsp-rust-analyzer-inlay-hints-mode t))
 
 ;; ============================================================
+;; LSP QUALITY OF LIFE - Go
+;; ============================================================
+(after! go-mode
+  (setq gofmt-command "goimports"))
+
+(after! lsp-mode
+  (setq lsp-go-analyses '((fieldalignment . t)
+                           (nilness . t)
+                           (unusedparams . t)
+                           (unusedwrite . t)
+                           (useany . t))
+        lsp-go-codelenses '((gc_details . t)
+                             (generate . t)
+                             (test . t)
+                             (tidy . t))))
+
+;; ============================================================
 ;; FILE / DIRECTORY CREATION KEYBINDS
 ;; ============================================================
 (defun my/create-file ()
@@ -271,6 +314,107 @@
       (:prefix ("f" . "files")
        :desc "Create new file" "n" #'my/create-file
        :desc "Create new directory" "N" #'my/create-directory))
+
+;; ============================================================
+;; LSP QUALITY OF LIFE - Haskell
+;; ============================================================
+
+;; Ensure ghcup binaries are visible to Emacs
+(add-to-list 'exec-path (expand-file-name "~/.ghcup/bin"))
+(setenv "PATH" (concat (expand-file-name "~/.ghcup/bin") ":" (getenv "PATH")))
+
+(after! haskell
+  ;; Use cabal or stack for the REPL — pick one:
+  (setq haskell-process-type 'cabal-repl)  ; or 'stack-ghci
+
+  ;; Formatting — set to your preferred formatter
+  ;; Options: "fourmolu", "ormolu", "stylish-haskell", "brittany"
+  (setq lsp-haskell-formatting-provider "fourmolu")
+
+  ;; Hindent-style indentation defaults
+  (setq haskell-indentation-layout-offset 2
+        haskell-indentation-left-offset 2
+        haskell-indentation-starter-offset 2))
+
+(after! lsp-haskell
+  ;; HLS plugin toggles — disable what you don't want
+  (setq lsp-haskell-plugin-stan-global-on nil          ; stan can be noisy
+        lsp-haskell-plugin-import-lens-code-lens-on nil ; import lens clutter
+        lsp-haskell-plugin-hlint-diagnostics-on t
+        lsp-haskell-plugin-rename-global-on t))
+
+;; Better type signature display
+(after! lsp-ui
+  (setq lsp-ui-doc-enable t
+        lsp-ui-doc-position 'at-point
+        lsp-ui-sideline-show-hover nil   ; less noise in the sideline
+        lsp-ui-sideline-show-code-actions t))
+
+;; ============================================================
+;; HASKELL ORG-BABEL (for literate book notes)
+;; ============================================================
+(after! org
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((haskell . t))))
+;; ============================================================
+;; PDF BOOK BROWSER WITH NOTES
+;; ============================================================
+(defvar my/books-directory "~/Documents/books"
+  "Directory containing PDF books.")
+
+(defvar my/book-notes-directory "~/Documents/books/notes"
+  "Directory for book notes org files.")
+
+(defun my/open-book ()
+  "Browse and open a PDF book with associated org notes in split view."
+  (interactive)
+  (let* ((books-dir (expand-file-name my/books-directory))
+         (notes-dir (expand-file-name my/book-notes-directory))
+         (pdf-paths (directory-files-recursively books-dir "\\.pdf\\'"))
+         ;; Filter out PDFs in the notes directory
+         (pdf-paths (seq-filter (lambda (p) (not (string-prefix-p notes-dir p))) pdf-paths))
+         ;; Build alist of display name -> full path
+         (pdf-alist (mapcar (lambda (path)
+                              (let* ((category (file-name-nondirectory
+                                                (directory-file-name (file-name-directory path))))
+                                     (name (file-name-nondirectory path)))
+                                (cons (format "[%s] %s" category name) path)))
+                            pdf-paths)))
+    (if pdf-alist
+        (let* ((choice (completing-read "Select book: " (mapcar #'car pdf-alist) nil t))
+               (book-path (cdr (assoc choice pdf-alist)))
+               (book-name (file-name-nondirectory book-path))
+               (notes-name (concat (file-name-sans-extension book-name) ".org"))
+               (notes-path (expand-file-name notes-name notes-dir)))
+          ;; Ensure notes directory exists
+          (make-directory notes-dir t)
+          ;; Create notes file with template if it doesn't exist
+          (unless (file-exists-p notes-path)
+            (with-temp-file notes-path
+              (insert (format "#+TITLE: Notes - %s\n#+PROPERTY: header-args:haskell :results output\n\n* Chapter 1\n\n#+begin_src haskell\n-- Your code here\n#+end_src\n"
+                              (file-name-sans-extension book-name)))))
+          ;; Open in split view: PDF left, notes right
+          (delete-other-windows)
+          (find-file book-path)
+          (split-window-right)
+          (other-window 1)
+          (find-file notes-path))
+      (message "No PDF files found in %s" books-dir))))
+
+(defun my/open-book-notes-only ()
+  "Open just the notes for a book without the PDF."
+  (interactive)
+  (let* ((notes-dir (expand-file-name my/book-notes-directory))
+         (notes (directory-files notes-dir nil "\\.org\\'" t)))
+    (if notes
+        (find-file (expand-file-name (completing-read "Select notes: " notes nil t) notes-dir))
+      (message "No notes found in %s" notes-dir))))
+
+(map! :leader
+      (:prefix ("b" . "buffer")
+       :desc "Open book + notes" "o" #'my/open-book
+       :desc "Open book notes" "n" #'my/open-book-notes-only))
 
 ;; ============================================================
 ;; CLAUDE CODE

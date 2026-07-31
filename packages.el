@@ -56,3 +56,7 @@
 
 (package! claude-code-ide
   :recipe (:host github :repo "manzaltu/claude-code-ide.el"))
+
+;; org-roam-ui
+(unpin! org-roam)
+(package! org-roam-ui)
